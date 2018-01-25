@@ -3,7 +3,7 @@ import numpy as np
 import os
 import tensorflow as tf
 
-from models.resnet_deeplab import resnet101_deeplab
+from models.resnet_deeplab import Resnet101Deeplab
 
 FLAGS = None
 params = None
@@ -36,7 +36,7 @@ def retrieve_data(name):
             key = 'conv1'
         elif name.find('batch_norm') != -1:
             key = 'bn_conv1'
-    else:
+    elif name.find('block') != -1:
         block_num = int(extract_number("block", '/', name))
         unit_num = int(extract_number('unit', '/', name))
 
@@ -58,11 +58,15 @@ def retrieve_data(name):
                 batch_norm_num = int(extract_number('batch_norm', '/', name))
                 key = 'bn' + block_name + '_branch2' + char_add(
                     'a', batch_norm_num - 1)
+    elif name.find('assp') != -1:
+        fc_num = int(extract_number('fc_', '/', name))
+        key = 'fc1_voc12_c' + str(fc_num)
 
     # retrieve data
     if params.get(key) is not None:
         var_name_list = [
-            'weights', 'moving_mean', 'moving_variance', 'beta', 'gamma'
+            'weights', 'moving_mean', 'moving_variance', 'beta', 'gamma',
+            'biases'
         ]
         for var in var_name_list:
             if name.find(var) != -1:
@@ -78,7 +82,7 @@ def main():
     load_npy(FLAGS.npy_path)
 
     images = tf.constant(0, tf.float32, shape=[1, 512, 512, 3])
-    model = resnet101_deeplab(images)
+    model = Resnet101Deeplab(images, 21)
 
     var_list = tf.global_variables()
 
