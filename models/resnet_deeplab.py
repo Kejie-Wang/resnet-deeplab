@@ -50,11 +50,13 @@ def bottleneck(inputs,
     return output
 
 
-def resnet_deeplab(inputs,
-                   num_units,
-                   is_training=False,
-                   scope=None,
-                   reuse=None):
+def build_network(inputs,
+                  num_units,
+                  num_classes,
+                  dilations,
+                  is_training=False,
+                  scope=None,
+                  reuse=None):
     assert len(num_units) == 4
     net = inputs
     with tf.variable_scope(
@@ -82,16 +84,72 @@ def resnet_deeplab(inputs,
             for i in range(num_units[3]):
                 net = bottleneck(
                     net, 2048, 1, rate=4, scope='unit%d' % (i + 1))
+        with tf.variable_scope('assp'):
+            dilation_outputs = []
+            for i, dilation in enumerate(dilations):
+                with tf.variable_scope('fc_%d' % (i)):
+                    output = resnet_utils.atrous_conv2d_same(
+                        net,
+                        num_classes,
+                        kernel_size=3,
+                        rate=dilation,
+                        biased=True)
+                    dilation_outputs.append(output)
+            net = tf.add_n(dilation_outputs)
+
     return net
 
 
-def resnet50_deeplab(inputs):
-    resnet_deeplab(inputs, num_units=[3, 4, 6, 3], scope="resnet50_deeplab")
+class ResnetDeeplab(object):
+    def __init__(self,
+                 inputs,
+                 num_units,
+                 num_classes,
+                 is_training=False,
+                 scope=None,
+                 reuse=None):
+        self.inputs = inputs
+        self.prediction = build_network(
+            inputs,
+            num_units,
+            num_classes,
+            dilations=[6, 12, 18, 24],
+            is_training=is_training,
+            scope=scope,
+            reuse=reuse)
 
 
-def resnet101_deeplab(inputs):
-    resnet_deeplab(inputs, num_units=[3, 4, 23, 3], scope="resnet101_deeplab")
+class Resnet50Deeplab(ResnetDeeplab):
+    def __init__(self, inputs, num_classes, is_training=False, reuse=None):
+        ResnetDeeplab.__init__(
+            self,
+            inputs,
+            [3, 4, 6, 3],
+            num_classes,
+            is_training=is_training,
+            scope="resnet50_deeplab",
+            reuse=reuse)
 
 
-def resnet152_deeplab(inputs):
-    resnet_deeplab(inputs, num_units=[3, 8, 36, 3], scope="resnet152_deeplab")
+class Resnet101Deeplab:
+    def __init__(self, inputs, num_classes, is_training=False, reuse=None):
+        ResnetDeeplab.__init__(
+            self,
+            inputs,
+            [3, 4, 23, 3],
+            num_classes,
+            is_training=is_training,
+            scope="resnet101_deeplab",
+            reuse=reuse)
+
+
+class Resnet152Deeplab:
+    def __init__(self, inputs, num_classes, is_training=False, reuse=None):
+        ResnetDeeplab.__init__(
+            self,
+            inputs,
+            [3, 8, 36, 3],
+            num_classes,
+            is_training=is_training,
+            scope="resnet151_deeplab",
+            reuse=reuse)

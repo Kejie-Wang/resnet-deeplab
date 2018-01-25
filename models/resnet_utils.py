@@ -8,7 +8,7 @@ def conv2d_same(inputs, num_outputs, kernel_size, stride, biased=False):
     outputs = tf.nn.conv2d(
         inputs, kernel, strides=[1, stride, stride, 1], padding='SAME')
     if biased:
-        bias = tf.get_variable('bias', shape=[num_outputs])
+        bias = tf.get_variable('biases', shape=[num_outputs])
         outputs = tf.nn.bias_add(outputs, bias)
     return outputs
 
@@ -19,7 +19,7 @@ def atrous_conv2d_same(inputs, num_outputs, kernel_size, rate=1, biased=False):
         'weights', shape=[kernel_size, kernel_size, depth_in, num_outputs])
     outputs = tf.nn.atrous_conv2d(inputs, kernel, rate=rate, padding='SAME')
     if biased:
-        bias = tf.get_variable('bias', shape=[num_outputs])
+        bias = tf.get_variable('biases', shape=[num_outputs])
         outputs = tf.nn.bias_add(outputs, bias)
     return outputs
 
