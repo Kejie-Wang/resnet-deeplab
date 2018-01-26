@@ -128,9 +128,9 @@ def main():
 
     with tf.name_scope('loss'):
         prediction_size = tf.stack(predictions.shape[1:3])
-        lables = tf.image.resize_nearest_neighbor(labels, prediction_size)
+        labels = tf.image.resize_nearest_neighbor(labels, prediction_size)
         labels = tf.squeeze(
-            lables, squeeze_dims=[3])  # squeeze the last (color) channel.
+            labels, squeeze_dims=[3])  # squeeze the last (color) channel.
         labels = tf.reshape(labels, [-1])
         # filter the indices which labels exceeds than num class.
         boolean_mask = tf.less(labels, args.num_classes)
