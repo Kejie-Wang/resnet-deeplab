@@ -148,6 +148,10 @@ def main():
         ])
         loss = entropy_loss + l2_loss
 
+        tf.summary.scalar('entropy_loss', entropy_loss)
+        tf.summary.scalar('l2_loss', l2_loss)
+        tf.summary.scalar('loss', loss)
+
     num_steps = math.ceil(
         dataset.num_examples / args.batch_size) * args.epoch_size
 
@@ -190,12 +194,17 @@ def main():
 
         loader.restore(sess, args.pretrain_model_path)
 
+        merged = tf.summary.merge_all()
         train_writer = tf.summary.FileWriter(args.log_dir + '/train',
                                              sess.graph)
 
         start_time = time.time()
         for i in range(num_steps):
-            sess.run(optimization, feed_dict={step_ph: i})
+            summary, _ = sess.run(
+                [merged, optimization], feed_dict={
+                    step_ph: i
+                })
+            train_writer.add_summary(summary, i)
             if i % args.print_step == 0 and i > 0:
                 pred, entropy_loss_val, l2_loss_val = sess.run(
                     [predictions, entropy_loss, l2_loss])
@@ -215,6 +224,7 @@ def main():
                     sess,
                     os.path.join(args.saved_model_dir, "model.ckpt"),
                     global_step=i)
+        train_writer.close()
 
 
 if __name__ == '__main__':
