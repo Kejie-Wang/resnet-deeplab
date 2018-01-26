@@ -4,7 +4,9 @@ import tensorflow as tf
 def conv2d_same(inputs, num_outputs, kernel_size, stride, biased=False):
     depth_in = inputs.shape[-1].value
     kernel = tf.get_variable(
-        'weights', shape=[kernel_size, kernel_size, depth_in, num_outputs])
+        'weights',
+        shape=[kernel_size, kernel_size, depth_in, num_outputs],
+        initializer=tf.truncated_normal_initializer(stddev=0.1))
     outputs = tf.nn.conv2d(
         inputs, kernel, strides=[1, stride, stride, 1], padding='SAME')
     if biased:
@@ -32,22 +34,28 @@ def max_pooling(inputs, kernel_size, stride):
         padding='SAME')
 
 
-def batch_norm(inputs, activation_fn=None, is_training=False):
-    depth_in = inputs.shape[-1].value
-    mean = tf.get_variable(
-        'moving_mean',
-        shape=[depth_in],
-        dtype=tf.float32,
-        trainable=is_training)
-    variance = tf.get_variable(
-        'moving_variance',
-        shape=[depth_in],
-        dtype=tf.float32,
-        trainable=is_training)
-    beta = tf.get_variable('beta', shape=[depth_in], dtype=tf.float32)
-    gamma = tf.get_variable('gamma', shape=[depth_in], dtype=tf.float32)
-    outputs = tf.nn.batch_normalization(
-        inputs, mean, variance, beta, gamma, variance_epsilon=0.001)
-    if activation_fn is not None:
-        outputs = activation_fn(outputs)
+def batch_norm(inputs, activation_fn=None, is_training=False, scope=None):
+    # depth_in = inputs.shape[-1].value
+    # mean = tf.get_variable(
+    # 'moving_mean',
+    # shape=[depth_in],
+    # dtype=tf.float32,
+    # trainable=is_training)
+    # variance = tf.get_variable(
+    # 'moving_variance',
+    # shape=[depth_in],
+    # dtype=tf.float32,
+    # trainable=is_training)
+    # beta = tf.get_variable('beta', shape=[depth_in], dtype=tf.float32)
+    # gamma = tf.get_variable('gamma', shape=[depth_in], dtype=tf.float32)
+    # outputs = tf.nn.batch_normalization(
+    # inputs, mean, variance, beta, gamma, variance_epsilon=0.001)
+    # if activation_fn is not None:
+    # outputs = activation_fn(outputs)
+    outputs = tf.contrib.layers.batch_norm(
+        inputs,
+        scale=True,
+        activation_fn=activation_fn,
+        is_training=is_training,
+        scope=scope)
     return outputs

@@ -14,17 +14,24 @@ def bottleneck(inputs,
         with tf.variable_scope("shortcut"):
             # increase the dimension and decrese size if needed.
             if depth != depth_in or stride > 1:
-                shortcut = resnet_utils.conv2d_same(inputs, depth, 1, stride)
+                with tf.variable_scope('conv1'):
+                    shortcut = resnet_utils.conv2d_same(
+                        inputs, depth, 1, stride)
                 shortcut = resnet_utils.batch_norm(
-                    shortcut, is_training=False, activation_fn=None)
+                    shortcut,
+                    is_training=False,
+                    activation_fn=None,
+                    scope='batch_norm')
             else:
                 shortcut = inputs
         with tf.variable_scope('conv1'):
             residual = resnet_utils.conv2d_same(
                 inputs, num_outputs=depth / 4, kernel_size=1, stride=stride)
-        with tf.variable_scope('batch_norm1'):
-            residual = resnet_utils.batch_norm(
-                residual, activation_fn=tf.nn.relu, is_training=False)
+        residual = resnet_utils.batch_norm(
+            residual,
+            activation_fn=tf.nn.relu,
+            is_training=False,
+            scope='batch_norm1')
         with tf.variable_scope('conv2'):
             if rate == 1:
                 residual = resnet_utils.conv2d_same(
@@ -32,15 +39,19 @@ def bottleneck(inputs,
             else:  # rate is not equal 1, use astrous convolution.
                 residual = resnet_utils.atrous_conv2d_same(
                     residual, num_outputs=depth / 4, kernel_size=3, rate=rate)
-        with tf.variable_scope('batch_norm2'):
-            residual = resnet_utils.batch_norm(
-                residual, activation_fn=tf.nn.relu, is_training=False)
+        residual = resnet_utils.batch_norm(
+            residual,
+            activation_fn=tf.nn.relu,
+            is_training=False,
+            scope='batch_norm2')
         with tf.variable_scope('conv3'):
             residual = resnet_utils.conv2d_same(
                 residual, num_outputs=depth, kernel_size=1, stride=1)
-        with tf.variable_scope('batch_norm3'):
-            residual = resnet_utils.batch_norm(
-                residual, activation_fn=tf.nn.relu, is_training=False)
+        residual = resnet_utils.batch_norm(
+            residual,
+            activation_fn=tf.nn.relu,
+            is_training=False,
+            scope='batch_norm3')
         if use_bounded_activations:
             # Use clip_by_value to simulate bandpass activation.
             residual = tf.clip_by_value(residual, -6.0, 6.0)
@@ -65,8 +76,8 @@ def build_network(inputs,
             with tf.variable_scope('conv1'):
                 net = resnet_utils.conv2d_same(
                     net, num_outputs=64, kernel_size=7, stride=2)
-            with tf.variable_scope('batch_norm1'):
-                net = resnet_utils.batch_norm(net, activation_fn=tf.nn.relu)
+            net = resnet_utils.batch_norm(
+                net, activation_fn=tf.nn.relu, scope='batch_norm1')
             with tf.variable_scope('pool1'):
                 net = resnet_utils.max_pooling(net, kernel_size=3, stride=2)
         with tf.variable_scope('block1'):
@@ -95,6 +106,7 @@ def build_network(inputs,
                         rate=dilation,
                         biased=True)
                     dilation_outputs.append(output)
+        with tf.name_scope('output'):
             net = tf.add_n(dilation_outputs)
 
     return net
@@ -123,8 +135,7 @@ class Resnet50Deeplab(ResnetDeeplab):
     def __init__(self, inputs, num_classes, is_training=False, reuse=None):
         ResnetDeeplab.__init__(
             self,
-            inputs,
-            [3, 4, 6, 3],
+            inputs, [3, 4, 6, 3],
             num_classes,
             is_training=is_training,
             scope="resnet50_deeplab",
@@ -135,8 +146,7 @@ class Resnet101Deeplab:
     def __init__(self, inputs, num_classes, is_training=False, reuse=None):
         ResnetDeeplab.__init__(
             self,
-            inputs,
-            [3, 4, 23, 3],
+            inputs, [3, 4, 23, 3],
             num_classes,
             is_training=is_training,
             scope="resnet101_deeplab",
@@ -147,8 +157,7 @@ class Resnet152Deeplab:
     def __init__(self, inputs, num_classes, is_training=False, reuse=None):
         ResnetDeeplab.__init__(
             self,
-            inputs,
-            [3, 8, 36, 3],
+            inputs, [3, 8, 36, 3],
             num_classes,
             is_training=is_training,
             scope="resnet151_deeplab",

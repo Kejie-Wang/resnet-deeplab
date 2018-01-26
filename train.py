@@ -10,6 +10,7 @@ import tensorflow as tf
 
 import dataset.reader as reader
 import models.resnet_deeplab as resnet_deeplab
+from utils.util import INFO, WARN, FAIL
 
 
 def get_arguments():
@@ -40,7 +41,7 @@ def get_arguments():
     parser.add_argument(
         '--saved_model_dir',
         type=str,
-        default=os.path.join('saved_model', 'model.ckpt'),
+        default=os.path.join('saved_model'),
         help='The path of saved model.')
     parser.add_argument(
         '--log_dir', type=str, default='logs', help='Directory of log.')
@@ -52,7 +53,7 @@ def get_arguments():
     parser.add_argument(
         '--input_size',
         type=str,
-        default='500x500',
+        default='512x512',
         help='The size of input image.')
     parser.add_argument(
         '--is_training',
@@ -70,22 +71,38 @@ def get_arguments():
         default='0.0005',
         help='Regularisation parameter for L2-loss.')
     parser.add_argument(
-        '--lr', type=float, default='1e-6', help='The learning rate.')
+        '--lr', type=float, default='1e-4', help='The base learning rate.')
+    parser.add_argument(
+        '--power', type=float, default='0.8', help='Decay for learning rate.')
+    parser.add_argument(
+        '--momentum',
+        type=float,
+        default='0.9',
+        help='Momentum component of the optimiser.')
 
     args = parser.parse_args()
 
     return args
 
 
+def print_arguments(args):
+    INFO('*' * 15, 'arguments', '*' * 15)
+    for key, value in vars(args).items():
+        INFO(key, ":", value)
+    INFO('*' * 40)
+
+
 def main():
     args = get_arguments()
+    print_arguments(args)
 
     height, width = map(int, args.input_size.split('x'))
 
     with tf.device('/cpu:0'):
         with tf.name_scope('image_reader'):
             dataset = reader.Dataset(args.data_dir, subset='train')
-            dataset.make_batch((height, width), args.batch_size, shuffle=True)
+            dataset.make_batch(
+                args.batch_size, input_size=(height, width), shuffle=True)
 
             images, labels = dataset.next_batch()
 
@@ -131,10 +148,32 @@ def main():
         ])
         loss = entropy_loss + l2_loss
 
+    num_steps = math.ceil(
+        dataset.num_examples / args.batch_size) * args.epoch_size
+
     with tf.name_scope('optimization'):
-        optimizer = tf.train.AdamOptimizer(learning_rate=args.lr)
-        optimization = optimizer.minimize(
-            loss, var_list=tf.trainable_variables())
+        step_ph = tf.placeholder(dtype=tf.float32, shape=())
+        lr = tf.scalar_mul(args.lr,
+                           tf.pow((1 - step_ph / num_steps), args.power))
+        opt_conv = tf.train.MomentumOptimizer(lr, args.momentum)
+        opt_fc_w = tf.train.MomentumOptimizer(lr * 10.0, args.momentum)
+        opt_fc_b = tf.train.MomentumOptimizer(lr * 20.0, args.momentum)
+
+        grads = tf.gradients(loss,
+                             conv_trainable + fc_w_trainable + fc_b_trainable)
+        grads_conv = grads[:len(conv_trainable)]
+        grads_fc_w = grads[len(conv_trainable):(
+            len(conv_trainable) + len(fc_w_trainable))]
+        grads_fc_b = grads[(len(conv_trainable) + len(fc_w_trainable)):]
+
+        train_op_conv = opt_conv.apply_gradients(
+            zip(grads_conv, conv_trainable))
+        train_op_fc_w = opt_fc_w.apply_gradients(
+            zip(grads_fc_w, fc_w_trainable))
+        train_op_fc_b = opt_fc_b.apply_gradients(
+            zip(grads_fc_b, fc_b_trainable))
+
+        optimization = tf.group(train_op_conv, train_op_fc_w, train_op_fc_b)
 
     if tf.gfile.Exists(args.log_dir):
         tf.gfile.DeleteRecursively(args.log_dir)
@@ -154,18 +193,28 @@ def main():
         train_writer = tf.summary.FileWriter(args.log_dir + '/train',
                                              sess.graph)
 
-        num_steps = math.ceil(
-            dataset.num_examples / args.batch_size) * args.epoch_size
         start_time = time.time()
         for i in range(num_steps):
-            sess.run(optimization)
+            sess.run(optimization, feed_dict={step_ph: i})
             if i % args.print_step == 0 and i > 0:
-                pred, loss_val = sess.run([predictions, loss])
+                pred, entropy_loss_val, l2_loss_val = sess.run(
+                    [predictions, entropy_loss, l2_loss])
                 duration = (time.time() - start_time) / i
-                print('step {:d} loss = {:.3f}, ({:.3f} sec/step)'.format(
-                    i, loss_val, duration))
-
-        saver.save(sess, os.path.join(args.saved_model_dir, "model.ckpt"))
+                INFO(
+                    'step {:d} entropy_loss = {:.3f} l2_loss= {:.3f} total_loss= {:.3f} ({:.3f} sec/step)'.
+                    format(i, entropy_loss_val, l2_loss_val,
+                           entropy_loss_val + l2_loss_val, duration))
+                if np.isnan(entropy_loss_val + l2_loss_val):
+                    for var in all_trainable:
+                        val = sess.run(var)
+                        if np.sum(np.isnan(val)) > 0:
+                            FAIL(var)
+                            FAIL(val)
+            if i % 1000 == 0:
+                saver.save(
+                    sess,
+                    os.path.join(args.saved_model_dir, "model.ckpt"),
+                    global_step=i)
 
 
 if __name__ == '__main__':

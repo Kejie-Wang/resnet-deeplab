@@ -137,25 +137,30 @@ class Dataset(object):
             raise ValueError('Invalid data subset "%s"' % self.subset)
 
     def make_batch(self,
-                   input_size,
-                   batch_size,
+                   batch_size=None,
+                   input_size=None,
                    epoch_size=None,
                    shuffle=False):
-        height, width = input_size
-
-        def preprocess(image_filename, mask_filename):
-            image, mask = read_image_and_mask(image_filename, mask_filename)
-            image, mask = image_scaling(image, mask)
-            image, mask = image_mirroring(image, mask)
-            image, mask = random_crop_and_pad_image_and_labels(
-                image, mask, height, width)
-
-            return image, mask
 
         dataset = tf.data.Dataset.from_tensor_slices((self.images, self.masks))
-        dataset = dataset.map(preprocess)
+        dataset =dataset.map(read_image_and_mask)
+        
+        # if the input size if not none
+        # then do data argumentation with
+        # random image scale and mirroring
+        if input_size is not None:
+            height, width = input_size
+            def preprocess(image, mask):
+                image, mask = image_scaling(image, mask)
+                image, mask = image_mirroring(image, mask)
+                image, mask = random_crop_and_pad_image_and_labels(
+                    image, mask, height, width)
+
+                return image, mask
+
+            dataset = dataset.map(preprocess)
         if shuffle:
-            dataset = dataset.shuffle(buffer_size=100)
+            dataset = dataset.shuffle(buffer_size=1000)
         dataset = dataset.batch(batch_size)
         dataset = dataset.repeat(epoch_size)
 
